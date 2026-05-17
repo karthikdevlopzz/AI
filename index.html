@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuralChat — AI Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #04030a;
+    --deep: #080618;
+    --surface: rgba(255,255,255,0.04);
+    --glass: rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.1);
+    --iris: #6c3fff;
+    --violet: #9d5cff;
+    --plasma: #b47aff;
+    --nova: #00d4ff;
+    --aurora: #ff6cf2;
+    --text-primary: #f0eeff;
+    --text-secondary: rgba(240,238,255,0.55);
+    --text-muted: rgba(240,238,255,0.3);
+    --glow-iris: rgba(108,63,255,0.4);
+    --glow-nova: rgba(0,212,255,0.3);
+    --bubble-user: linear-gradient(135deg, rgba(108,63,255,0.35), rgba(157,92,255,0.2));
+    --bubble-ai: rgba(255,255,255,0.04);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--void);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── CANVAS ── */
+  #neural-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── AMBIENT BLOBS ── */
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.18;
+    pointer-events: none;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .blob-1 { width:500px; height:500px; background:var(--iris); top:-100px; left:-100px; animation-duration:20s; }
+  .blob-2 { width:400px; height:400px; background:var(--nova); bottom:-80px; right:-80px; animation-duration:16s; animation-delay:-6s; }
+  .blob-3 { width:300px; height:300px; background:var(--aurora); top:40%; left:50%; transform:translate(-50%,-50%); animation-duration:22s; animation-delay:-10s; }
+
+  @keyframes drift {
+    0%   { transform: translate(0,0) scale(1); }
+    33%  { transform: translate(30px,-20px) scale(1.05); }
+    66%  { transform: translate(-20px,30px) scale(0.95); }
+    100% { transform: translate(10px,10px) scale(1.02); }
+  }
+
+  /* ── LAYOUT ── */
+  .app {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 16px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0 16px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-orb {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--iris), var(--nova));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 20px var(--glow-iris), 0 0 40px rgba(108,63,255,0.2);
+    animation: orb-pulse 3s ease-in-out infinite;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-orb::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+  }
+
+  .logo-orb svg { width: 20px; height: 20px; fill: white; position: relative; z-index: 1; }
+
+  @keyframes orb-pulse {
+    0%,100% { box-shadow: 0 0 20px var(--glow-iris), 0 0 40px rgba(108,63,255,0.2); }
+    50%      { box-shadow: 0 0 30px var(--glow-iris), 0 0 60px rgba(108,63,255,0.35), 0 0 80px rgba(0,212,255,0.15); }
+  }
+
+  .logo-text { line-height: 1; }
+  .logo-name { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; background: linear-gradient(90deg, var(--plasma), var(--nova)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .logo-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); letter-spacing: 2px; margin-top: 1px; }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--nova);
+    letter-spacing: 0.5px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--nova);
+    box-shadow: 0 0 8px var(--nova);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    backdrop-filter: blur(10px);
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); border-color: rgba(255,255,255,0.2); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* ── CHAT AREA ── */
+  .chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(108,63,255,0.3) transparent;
+  }
+  .chat-container::-webkit-scrollbar { width: 4px; }
+  .chat-container::-webkit-scrollbar-track { background: transparent; }
+  .chat-container::-webkit-scrollbar-thumb { background: rgba(108,63,255,0.3); border-radius: 4px; }
+
+  /* ── MESSAGES ── */
+  .message { display: flex; gap: 12px; align-items: flex-start; animation: msgIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes msgIn { from { opacity:0; transform: translateY(16px) scale(0.97); } to { opacity:1; transform: none; } }
+
+  .message.user { flex-direction: row-reverse; }
+
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 11px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    position: relative;
+  }
+  .avatar-ai {
+    background: linear-gradient(135deg, var(--iris), var(--violet));
+    box-shadow: 0 0 16px var(--glow-iris);
+  }
+  .avatar-ai::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 13px;
+    background: linear-gradient(135deg, var(--iris), var(--nova), var(--aurora));
+    z-index: -1;
+    opacity: 0.5;
+    animation: avatar-glow 3s ease-in-out infinite alternate;
+  }
+  @keyframes avatar-glow { 0%{opacity:0.3} 100%{opacity:0.7} }
+  .avatar-user { background: linear-gradient(135deg, #2a1f4a, #1a1535); border: 1px solid var(--glass-border); }
+
+  .bubble {
+    max-width: 68%;
+    padding: 14px 18px;
+    border-radius: 18px;
+    font-size: 14.5px;
+    line-height: 1.65;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bubble::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.03), rgba(108,63,255,0.2));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .bubble-ai {
+    background: var(--bubble-ai);
+    border: 1px solid rgba(255,255,255,0.07);
+    color: var(--text-primary);
+    border-radius: 4px 18px 18px 18px;
+  }
+
+  .bubble-user {
+    background: var(--bubble-user);
+    border: 1px solid rgba(108,63,255,0.3);
+    color: var(--text-primary);
+    border-radius: 18px 4px 18px 18px;
+    box-shadow: 0 4px 24px rgba(108,63,255,0.15);
+  }
+
+  .bubble-inner { position: relative; z-index: 1; }
+
+  .bubble-shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.04) 50%, transparent 60%);
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .msg-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    letter-spacing: 0.3px;
+  }
+  .message.user .msg-meta { text-align: right; }
+
+  /* code in bubble */
+  .bubble code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: rgba(108,63,255,0.15);
+    border: 1px solid rgba(108,63,255,0.2);
+    border-radius: 5px;
+    padding: 1px 6px;
+    color: var(--plasma);
+  }
+
+  /* ── TYPING INDICATOR ── */
+  .typing-bubble { display: none; }
+  .typing-bubble.active { display: flex; }
+  .typing-dots { display: flex; align-items: center; gap: 5px; padding: 4px 0; }
+  .typing-dots span {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--violet);
+    animation: bounce 1.2s ease-in-out infinite;
+  }
+  .typing-dots span:nth-child(1) { animation-delay: 0s; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.18s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:0.5} 30%{transform:translateY(-7px);opacity:1} }
+
+  /* ── SUGGESTIONS ── */
+  .suggestions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 0 4px;
+  }
+  .suggestion-chip {
+    padding: 7px 13px;
+    background: rgba(108,63,255,0.08);
+    border: 1px solid rgba(108,63,255,0.2);
+    border-radius: 20px;
+    font-size: 12.5px;
+    color: var(--plasma);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+  }
+  .suggestion-chip:hover { background: rgba(108,63,255,0.2); border-color: rgba(108,63,255,0.4); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(108,63,255,0.2); }
+
+  /* ── INPUT AREA ── */
+  .input-area {
+    padding: 12px 0 20px;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .input-box {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 12px 12px 12px 18px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: border-color 0.3s, box-shadow 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .input-box::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(108,63,255,0.05), transparent, rgba(0,212,255,0.03));
+    pointer-events: none;
+  }
+
+  .input-box:focus-within {
+    border-color: rgba(108,63,255,0.5);
+    box-shadow: 0 0 0 3px rgba(108,63,255,0.1), 0 0 30px rgba(108,63,255,0.1);
+  }
+
+  #chat-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: 'Syne', sans-serif;
+    font-size: 14.5px;
+    line-height: 1.5;
+    resize: none;
+    max-height: 120px;
+    min-height: 22px;
+    scrollbar-width: none;
+    caret-color: var(--plasma);
+  }
+  #chat-input::placeholder { color: var(--text-muted); }
+  #chat-input::-webkit-scrollbar { display: none; }
+
+  .input-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+  .attach-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .attach-btn:hover { color: var(--text-secondary); border-color: rgba(255,255,255,0.2); }
+  .attach-btn svg { width: 16px; height: 16px; }
+
+  .send-btn {
+    width: 40px; height: 40px;
+    border-radius: 13px;
+    border: none;
+    background: linear-gradient(135deg, var(--iris), var(--violet));
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 4px 20px rgba(108,63,255,0.5), 0 0 0 0 rgba(108,63,255,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .send-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .send-btn:hover {
+    transform: scale(1.08) translateY(-1px);
+    box-shadow: 0 6px 28px rgba(108,63,255,0.65), 0 0 40px rgba(108,63,255,0.3);
+  }
+  .send-btn:hover::before { opacity: 1; }
+
+  .send-btn:active { transform: scale(0.96); }
+
+  .send-btn svg { width: 17px; height: 17px; position: relative; z-index: 1; }
+
+  .send-btn .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    transform: scale(0);
+    animation: ripple-anim 0.6s linear;
+    pointer-events: none;
+  }
+  @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+  .input-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 4px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .model-tag {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    background: rgba(108,63,255,0.08);
+    border: 1px solid rgba(108,63,255,0.15);
+    border-radius: 8px;
+  }
+  .model-tag-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--iris); }
+
+  /* ── WELCOME SCREEN ── */
+  .welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 20px;
+    padding: 40px 0;
+  }
+
+  .welcome-orb {
+    width: 80px; height: 80px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, var(--iris), var(--nova));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 40px var(--glow-iris), 0 0 80px rgba(108,63,255,0.2);
+    animation: orb-pulse 3s ease-in-out infinite, float 4s ease-in-out infinite alternate;
+    position: relative;
+  }
+
+  .welcome-orb::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 32px;
+    border: 1px solid rgba(108,63,255,0.2);
+    animation: ring-pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes float { 0%{transform:translateY(0)} 100%{transform:translateY(-10px)} }
+  @keyframes ring-pulse { 0%,100%{opacity:0.3;transform:scale(1)} 50%{opacity:0.7;transform:scale(1.08)} }
+
+  .welcome-orb svg { width: 38px; height: 38px; fill: white; }
+
+  .welcome h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, var(--text-primary) 40%, var(--plasma)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .welcome p { font-size: 15px; color: var(--text-secondary); max-width: 400px; line-height: 1.6; }
+
+  .welcome-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+  .hidden { display: none !important; }
+
+  /* ── SCROLLBAR for firefox ── */
+  * { scrollbar-width: thin; scrollbar-color: rgba(108,63,255,0.2) transparent; }
+</style>
+</head>
+<body>
+
+<canvas id="neural-canvas"></canvas>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-orb">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+      </div>
+      <div class="logo-text">
+        <div class="logo-name">NeuralChat</div>
+        <div class="logo-sub">AI ASSISTANT</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        ONLINE
+      </div>
+      <button class="icon-btn" title="New Chat" onclick="resetChat()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="icon-btn" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- WELCOME -->
+  <div class="welcome" id="welcome-screen">
+    <div class="welcome-orb">
+      <svg viewBox="0 0 24 24"><path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z"/></svg>
+    </div>
+    <h1>Hello, I'm NeuralChat</h1>
+    <p>Your intelligent AI companion, built for deep thinking, creative work, and complex problem‑solving.</p>
+    <div class="welcome-chips">
+      <div class="suggestion-chip" onclick="sendSuggestion(this)">✦ Explain quantum computing</div>
+      <div class="suggestion-chip" onclick="sendSuggestion(this)">✦ Write a Python script</div>
+      <div class="suggestion-chip" onclick="sendSuggestion(this)">✦ Creative storytelling</div>
+      <div class="suggestion-chip" onclick="sendSuggestion(this)">✦ Debug my code</div>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="chat-container hidden" id="chat-container">
+    <!-- messages injected here -->
+    <div class="message typing-bubble" id="typing-indicator">
+      <div class="avatar avatar-ai">⚡</div>
+      <div>
+        <div class="bubble bubble-ai">
+          <div class="bubble-shimmer"></div>
+          <div class="bubble-inner">
+            <div class="typing-dots">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUT -->
+  <div class="input-area">
+    <div class="input-box">
+      <textarea id="chat-input" placeholder="Ask me anything…" rows="1" maxlength="4000"></textarea>
+      <div class="input-actions">
+        <button class="attach-btn" title="Attach file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="input-meta">
+      <div class="model-tag">
+        <div class="model-tag-dot"></div>
+        claude-sonnet-4
+      </div>
+      <span>shift+enter for newline</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════
+   NEURAL NETWORK CANVAS
+══════════════════════════════════ */
+const canvas = document.getElementById('neural-canvas');
+const ctx = canvas.getContext('2d');
+
+let W, H, nodes = [], mouse = { x: -999, y: -999 };
+const NODE_COUNT = 60;
+const MAX_DIST = 160;
+const PULSE_SPEED = 0.008;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+
+function initNodes() {
+  nodes = [];
+  for (let i = 0; i < NODE_COUNT; i++) {
+    nodes.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: Math.random() * 2.5 + 1,
+      pulse: Math.random() * Math.PI * 2,
+      color: Math.random() > 0.6 ? '#00d4ff' : (Math.random() > 0.5 ? '#9d5cff' : '#ff6cf2'),
+      alpha: Math.random() * 0.5 + 0.3
+    });
+  }
+}
+
+let pulsePhase = 0;
+
+function drawFrame() {
+  ctx.clearRect(0, 0, W, H);
+  pulsePhase += PULSE_SPEED;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    n.x += n.vx;
+    n.y += n.vy;
+    if (n.x < -50) n.x = W + 50;
+    if (n.x > W + 50) n.x = -50;
+    if (n.y < -50) n.y = H + 50;
+    if (n.y > H + 50) n.y = -50;
+
+    // Mouse attraction
+    const dx = mouse.x - n.x, dy = mouse.y - n.y;
+    const md = Math.sqrt(dx*dx + dy*dy);
+    if (md < 200) {
+      n.x += dx * 0.001;
+      n.y += dy * 0.001;
+    }
+
+    n.pulse += 0.03;
+    const pulseFactor = 0.7 + 0.3 * Math.sin(n.pulse);
+
+    // Node glow
+    const gradient = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 4);
+    gradient.addColorStop(0, n.color + 'cc');
+    gradient.addColorStop(1, n.color + '00');
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r * 4, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.globalAlpha = n.alpha * pulseFactor * 0.5;
+    ctx.fill();
+
+    // Node dot
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r * pulseFactor, 0, Math.PI * 2);
+    ctx.fillStyle = n.color;
+    ctx.globalAlpha = n.alpha * pulseFactor;
+    ctx.fill();
+
+    // Connections
+    for (let j = i + 1; j < nodes.length; j++) {
+      const m = nodes[j];
+      const ex = m.x - n.x, ey = m.y - n.y;
+      const dist = Math.sqrt(ex*ex + ey*ey);
+      if (dist < MAX_DIST) {
+        const strength = 1 - dist / MAX_DIST;
+        const grad = ctx.createLinearGradient(n.x, n.y, m.x, m.y);
+        grad.addColorStop(0, n.color);
+        grad.addColorStop(1, m.color);
+        ctx.beginPath();
+        ctx.moveTo(n.x, n.y);
+        ctx.lineTo(m.x, m.y);
+        ctx.strokeStyle = grad;
+        ctx.globalAlpha = strength * 0.18 * pulseFactor;
+        ctx.lineWidth = strength * 1.2;
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(drawFrame);
+}
+
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+window.addEventListener('resize', () => { resize(); initNodes(); });
+resize(); initNodes(); drawFrame();
+
+
+/* ══════════════════════════════════
+   CHAT LOGIC
+══════════════════════════════════ */
+const input = document.getElementById('chat-input');
+const chatContainer = document.getElementById('chat-container');
+const welcomeScreen = document.getElementById('welcome-screen');
+const typingIndicator = document.getElementById('typing-indicator');
+
+let conversationHistory = [];
+let isResponding = false;
+
+// Auto-resize textarea
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+function getTime() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function appendMessage(role, text, animate = true) {
+  const isUser = role === 'user';
+  const div = document.createElement('div');
+  div.className = `message ${isUser ? 'user' : 'ai'}`;
+  if (!animate) div.style.animation = 'none';
+
+  const avatarHTML = isUser
+    ? `<div class="avatar avatar-user">you</div>`
+    : `<div class="avatar avatar-ai">⚡</div>`;
+
+  const formattedText = formatText(text);
+
+  div.innerHTML = `
+    ${avatarHTML}
+    <div>
+      <div class="bubble ${isUser ? 'bubble-user' : 'bubble-ai'}">
+        <div class="bubble-shimmer"></div>
+        <div class="bubble-inner">${formattedText}</div>
+      </div>
+      <div class="msg-meta">${getTime()}</div>
+    </div>
+  `;
+
+  // Insert before typing indicator
+  chatContainer.insertBefore(div, typingIndicator);
+  scrollToBottom();
+  return div;
+}
+
+function formatText(text) {
+  // Simple markdown-lite
+  return text
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+function showTyping(show) {
+  typingIndicator.classList.toggle('active', show);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }, 50);
+}
+
+function rippleEffect(btn) {
+  const ripple = document.createElement('span');
+  ripple.className = 'ripple';
+  ripple.style.cssText = `width:40px;height:40px;left:0;top:0;`;
+  btn.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 700);
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || isResponding) return;
+
+  isResponding = true;
+
+  // Show chat, hide welcome
+  welcomeScreen.classList.add('hidden');
+  chatContainer.classList.remove('hidden');
+
+  // User message
+  appendMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+
+  // Reset input
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Ripple
+  rippleEffect(document.getElementById('send-btn'));
+
+  // Typing indicator
+  showTyping(true);
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: "You are NeuralChat, a sleek, sophisticated AI assistant. Be helpful, insightful, and concise. Use `code` formatting for technical terms. Keep responses elegant and to the point.",
+        messages: conversationHistory
+      })
+    });
+
+    const data = await response.json();
+    const reply = data.content?.[0]?.text || "I encountered an error. Please try again.";
+
+    showTyping(false);
+    appendMessage('ai', reply);
+    conversationHistory.push({ role: 'assistant', content: reply });
+
+  } catch (err) {
+    showTyping(false);
+    appendMessage('ai', "I'm having trouble connecting right now. Please check your connection and try again.");
+  }
+
+  isResponding = false;
+}
+
+function sendSuggestion(el) {
+  const text = el.textContent.replace(/^✦\s*/, '').trim();
+  input.value = text;
+  sendMessage();
+}
+
+function resetChat() {
+  conversationHistory = [];
+  isResponding = false;
+  chatContainer.innerHTML = '';
+  chatContainer.appendChild(typingIndicator);
+  chatContainer.classList.add('hidden');
+  welcomeScreen.classList.remove('hidden');
+  showTyping(false);
+}
+</script>
+</body>
+</html>
